@@ -1,57 +1,82 @@
-import os
-import requests
-from dotenv import load_dotenv
 import streamlit as st
+from groq import Groq
 
-# Caricamento delle chiavi API
-load_dotenv()
-llama3_api_key = os.getenv("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")
-llama3_api_url = os.getenv("https://download6.llamameta.net/*?Policy=eyJTdGF0ZW1lbnQiOlt7InVuaXF1ZV9oYXNoIjoiaG03bHdoYnEyMGlyeHNhNTFyOXlrbGswIiwiUmVzb3VyY2UiOiJodHRwczpcL1wvZG93bmxvYWQ2LmxsYW1hbWV0YS5uZXRcLyoiLCJDb25kaXRpb24iOnsiRGF0ZUxlc3NUaGFuIjp7IkFXUzpFcG9jaFRpbWUiOjE3MTY3OTM4MTJ9fX1dfQ__&Signature=HGj3HDQVGauxt0l2QM5%7EzMLieNEn-eOjOUiRDoUzCPDihIvrBG0auKnl13WJPxv%7ElBdgYMOVh6j40aNMXe3mgTE5NNt3Y94Tc0tFNkSlNNR2LahR65wvGAD6uIdqV%7EY0qH2-ksXdgCYcWGDvFGCWdeS4EkL-Lcqkk10VaCuPJrrck%7EaGCxZElTFUtC1Jz51XkrTWaPUAu22Ugkb5JlVrDyFSXk6lhToG0I0GzgKeBG8K%7Eg9wrW78dfDSQVkdTRcELRRb-kSeiT5s1O2dIO39x4IDXDMwP5NsKv%7EZchrOJN2Tl1Ec-CD8c3fLuer05Y2PIylziEYZoItP5Wjx6l0XOQ__&Key-Pair-Id=K15QRJLYKIFSLZ&Download-Request-ID=981136506499991")
+# Funzione per ottenere una risposta dal modello Groq
+def get_groq_response(messages):
+    client = Groq()
+    completion = client.chat.completions.create(
+        model="llama3-8b-8192",
+        messages=messages,
+        temperature=1,
+        max_tokens=1024,
+        top_p=1,
+        stream=True,
+        stop=None,
+    )
+    response = ""
+    for chunk in completion:
+        if chunk.choices[0].delta.content:
+            response += chunk.choices[0].delta.content
+    return response
 
-# Implementazione del Chatbot con Llama3 via API HTTP
-class Llama3Chatbot:
-    def __init__(self, api_key, api_url):
-        self.api_key = api_key
-        self.api_url = api_url
-        self.history = []
+# Funzione principale per eseguire la conversazione con l'assistente
+def run_conversation():
+    # Inizializza la lista dei messaggi con il messaggio iniziale dell'assistente
+    if "messages" not in st.session_state:
+        st.session_state.messages = [
+            {"role": "assistant", "content": "Benvenuto! Come posso aiutarti oggi nel mercato finanziario?"}
+        ]
+        st.session_state.last_input = ""
 
-    def ask(self, question):
-        headers = {
-            'Authorization': f'Bearer {self.api_key}',
-            'Content-Type': 'application/json'
-        }
-        payload = {
-            'prompt': question,
-            'max_tokens': 150  # Adjust based on your requirement
-        }
-        response = requests.post(self.api_url, headers=headers, json=payload)
-        if response.status_code == 200:
-            answer = response.json().get('choices', [{}])[0].get('text', '').strip()
-            self.history.append({"question": question, "answer": answer})
-            return answer
-        else:
-            return "Errore nella chiamata API a Llama 3"
+    # Visualizza i messaggi della conversazione
+    for message in st.session_state.messages:
+        if message["role"] == "user":
+            st.write(f"**Utente:** {message['content']}")
+        elif message["role"] == "assistant":
+            st.write(f"**Assistente:** {message['content']}")
 
-    def get_prospect(self):
-        prospect = "\n".join([f"Q: {qa['question']}\nA: {qa['answer']}" for qa in self.history])
-        return prospect
+    # Input dell'utente
+    user_input = st.text_input("Inserisci il tuo messaggio:", key="input_message")
 
-# Funzione principale per Streamlit
+    # Se l'utente inserisce un messaggio, aggiungilo ai messaggi e genera una risposta
+    if user_input and user_input != st.session_state.last_input:
+        st.session_state.messages.append({"role": "user", "content": user_input})
+        
+        # Ottenere la risposta dell'assistente dal client Groq
+        response = get_groq_response(st.session_state.messages)
+        st.session_state.messages.append({"role": "assistant", "content": response})
+
+        # Salva l'ultimo input per evitare cicli infiniti
+        st.session_state.last_input = user_input
+        
+        # Ripulire l'input dopo l'invio
+        st.experimental_rerun()
+
+    # Pulsante per generare il report finale
+    if st.button("Genera Report"):
+        generate_report()
+
+# Funzione per generare un report
+def generate_report():
+    st.write("**Generazione del report sugli obiettivi finanziari**")
+    # Estrarre le informazioni chiave dai messaggi
+    goals = [message["content"] for message in st.session_state.messages if message["role"] == "user"]
+
+    # Creare il report
+    report = "\n".join(goals)
+    st.write("**Report:**")
+    st.write(report)
+
+    # Saluto finale
+    st.write("Grazie per aver utilizzato il nostro servizio di assistenza agli investimenti. Buona giornata!")
+
+# Funzione principale di Streamlit
 def main():
-    llama3_bot = Llama3Chatbot(api_key=llama3_api_key, api_url=llama3_api_url)
+    st.title("Investment Assistance Chatbot")
+    st.write("Benvenuto nel chatbot di assistenza agli investimenti!")
 
-    st.title("InvestGreenBot")
-    st.write("Benvenuto in InvestGreenBot! Fai una domanda sulla finanza green o sul mercato azionario.")
-
-    question = st.text_input("Fai una domanda:")
-
-    if question:
-        st.write("### Risposta di Llama3Bot:")
-        llama3_response = llama3_bot.ask(question)
-        st.write(llama3_response)
-
-        st.write("## Prospetto delle domande e risposte di Llama3Bot:")
-        st.text(llama3_bot.get_prospect())
+    # Avvia la conversazione
+    run_conversation()
 
 if __name__ == "__main__":
     main()
