@@ -82,7 +82,6 @@ def generate_report():
 def main():
     st.title("💼 Chat di Assistenza Finanziaria 💰")
     st.write("Benvenuto nella chat di assistenza finanziaria!")
-
     # Avvia la conversazione
     run_conversation()
 
